@@ -133,7 +133,10 @@ async function handleExtractionPipeline(
 		// 2. Crop to selection
 		await updateState({ status: "cropping", startedAt });
 
-		const croppedDataUrl = await cropScreenshot(screenshotDataUrl, region);
+		const { croppedDataUrl, thumbnailDataUrl } = await cropScreenshot(
+			screenshotDataUrl,
+			region,
+		);
 
 		// 3. Try DOM extraction first (if enabled)
 		const domFirst = (await get("settings.domFirst")) ?? true;
@@ -214,7 +217,7 @@ async function handleExtractionPipeline(
 
 		await saveToHistory({
 			result: finalResult,
-			imageDataUrl: croppedDataUrl,
+			imageDataUrl: thumbnailDataUrl,
 			model,
 			tokensUsed,
 			durationMs,
@@ -259,7 +262,7 @@ async function handleExtractionPipeline(
 async function cropScreenshot(
 	imageDataUrl: string,
 	region: SelectionRegion,
-): Promise<string> {
+): Promise<{ croppedDataUrl: string; thumbnailDataUrl: string }> {
 	// Create offscreen document (guard against "already exists")
 	try {
 		await chrome.offscreen.createDocument({
@@ -279,7 +282,10 @@ async function cropScreenshot(
 	const response = (await chrome.runtime.sendMessage({
 		type: "CROP_REQUEST",
 		payload: { imageDataUrl, region },
-	})) as { type: string; payload: { croppedDataUrl: string } };
+	})) as {
+		type: string;
+		payload: { croppedDataUrl: string; thumbnailDataUrl: string };
+	};
 
 	try {
 		await chrome.offscreen.closeDocument();
@@ -293,7 +299,10 @@ async function cropScreenshot(
 		throw new Error(errPayload.message);
 	}
 
-	return response.payload.croppedDataUrl;
+	return {
+		croppedDataUrl: response.payload.croppedDataUrl,
+		thumbnailDataUrl: response.payload.thumbnailDataUrl,
+	};
 }
 
 // ── State management ──────────────────────────────────────

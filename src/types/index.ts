@@ -87,6 +87,7 @@ export interface CropRequest {
 
 export interface CropResult {
 	croppedDataUrl: string;
+	thumbnailDataUrl: string;
 }
 
 // ── Storage ───────────────────────────────────────────────

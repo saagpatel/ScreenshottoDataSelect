@@ -17,8 +17,11 @@ chrome.runtime.onMessage.addListener(
 		};
 
 		cropImage(payload.imageDataUrl, payload.region)
-			.then((croppedDataUrl) => {
-				sendResponse({ type: "CROP_RESULT", payload: { croppedDataUrl } });
+			.then(({ croppedDataUrl, thumbnailDataUrl }) => {
+				sendResponse({
+					type: "CROP_RESULT",
+					payload: { croppedDataUrl, thumbnailDataUrl },
+				});
 			})
 			.catch((err: unknown) => {
 				console.error("[Offscreen] Crop failed:", err);
@@ -44,7 +47,7 @@ async function cropImage(
 		height: number;
 		devicePixelRatio: number;
 	},
-): Promise<string> {
+): Promise<{ croppedDataUrl: string; thumbnailDataUrl: string }> {
 	const img = new Image();
 	await new Promise<void>((resolve, reject) => {
 		img.onload = () => resolve();
@@ -67,7 +70,23 @@ async function cropImage(
 
 	ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
 
-	return canvas.toDataURL("image/png");
+	const croppedDataUrl = canvas.toDataURL("image/png");
+
+	// Generate compressed thumbnail (max 200px wide, JPEG quality 0.6)
+	const thumbMaxWidth = 200;
+	const scale = Math.min(1, thumbMaxWidth / sw);
+	const tw = Math.round(sw * scale);
+	const th = Math.round(sh * scale);
+
+	const thumbCanvas = document.createElement("canvas");
+	thumbCanvas.width = tw;
+	thumbCanvas.height = th;
+	const tctx = thumbCanvas.getContext("2d");
+	if (!tctx) return { croppedDataUrl, thumbnailDataUrl: croppedDataUrl };
+	tctx.drawImage(canvas, 0, 0, tw, th);
+	const thumbnailDataUrl = thumbCanvas.toDataURL("image/jpeg", 0.6);
+
+	return { croppedDataUrl, thumbnailDataUrl };
 }
 
 console.log("[Offscreen] Crop document loaded");

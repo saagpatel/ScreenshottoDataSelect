@@ -134,8 +134,14 @@ export default function App() {
 						imageDataUrl={previewData.imageDataUrl}
 						durationMs={previewData.durationMs}
 						tokensUsed={previewData.tokensUsed}
+						model={settings?.model}
 						defaultFormat={settings?.defaultFormat}
 						onReset={handleReset}
+						onReExtract={
+							previewData.result.extractionMethod === "dom"
+								? handleSelectRegion
+								: undefined
+						}
 					/>
 				) : state.status === "error" ? (
 					<div className="flex flex-col items-center gap-4 py-8">
