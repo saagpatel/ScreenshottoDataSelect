@@ -1,0 +1,19 @@
+/* Selection overlay styles — injected into host page */
+#dataselect-overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
+	z-index: 2147483647;
+	cursor: crosshair;
+	pointer-events: auto;
+}
+
+#dataselect-selection-rect {
+	position: fixed;
+	border: 2px dashed #4f46e5;
+	background: rgba(79, 70, 229, 0.08);
+	z-index: 2147483647;
+	pointer-events: none;
+}
