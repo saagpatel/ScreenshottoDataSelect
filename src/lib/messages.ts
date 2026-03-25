@@ -1,4 +1,6 @@
 import type {
+	CropRequest,
+	CropResult,
 	ExtractionResult,
 	ExtractionStage,
 	ExtractRequest,
@@ -14,7 +16,9 @@ export type ExtensionMessage =
 	| { type: "EXTRACT_REQUEST"; payload: ExtractRequest }
 	| { type: "EXTRACT_PROGRESS"; payload: { stage: ExtractionStage } }
 	| { type: "EXTRACT_RESULT"; payload: ExtractionResult }
-	| { type: "EXTRACT_ERROR"; payload: { message: string; code: string } };
+	| { type: "EXTRACT_ERROR"; payload: { message: string; code: string } }
+	| { type: "CROP_REQUEST"; payload: CropRequest }
+	| { type: "CROP_RESULT"; payload: CropResult };
 
 // ── Type guard ────────────────────────────────────────────
 
@@ -26,6 +30,8 @@ const MESSAGE_TYPES = new Set([
 	"EXTRACT_PROGRESS",
 	"EXTRACT_RESULT",
 	"EXTRACT_ERROR",
+	"CROP_REQUEST",
+	"CROP_RESULT",
 ]);
 
 export function isExtensionMessage(msg: unknown): msg is ExtensionMessage {

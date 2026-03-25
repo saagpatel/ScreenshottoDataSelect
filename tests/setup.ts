@@ -47,6 +47,10 @@ const chromeStorageLocal = {
 const chromeMock = {
 	storage: {
 		local: chromeStorageLocal,
+		onChanged: {
+			addListener: vi.fn(),
+			removeListener: vi.fn(),
+		},
 	},
 	runtime: {
 		sendMessage: vi.fn(),
@@ -66,9 +70,24 @@ const chromeMock = {
 	tabs: {
 		sendMessage: vi.fn(),
 		query: vi.fn(),
+		captureVisibleTab: vi.fn(),
 	},
 	scripting: {
 		executeScript: vi.fn(),
+	},
+	action: {
+		setBadgeText: vi.fn(),
+		setBadgeBackgroundColor: vi.fn(),
+	},
+	offscreen: {
+		createDocument: vi.fn(),
+		closeDocument: vi.fn(),
+		Reason: { CANVAS: "CANVAS" },
+	},
+	commands: {
+		onCommand: {
+			addListener: vi.fn(),
+		},
 	},
 };
 

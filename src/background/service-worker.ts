@@ -1,4 +1,11 @@
+import { extractTable } from "../lib/api";
 import { type ExtensionMessage, isExtensionMessage } from "../lib/messages";
+import { get, getApiKey, set, setExtractionState } from "../lib/storage";
+import type {
+	ExtractionRecord,
+	ExtractionState,
+	SelectionRegion,
+} from "../types";
 
 // ── Message routing ───────────────────────────────────────
 
@@ -26,7 +33,6 @@ chrome.runtime.onMessage.addListener(
 				});
 			});
 
-		// Return true to indicate async response
 		return true;
 	},
 );
@@ -35,9 +41,7 @@ chrome.runtime.onMessage.addListener(
 
 chrome.runtime.onConnect.addListener((port) => {
 	if (port.name !== "extraction-progress") return;
-
 	console.log("[SW] Progress port connected");
-
 	port.onDisconnect.addListener(() => {
 		console.log("[SW] Progress port disconnected");
 	});
@@ -57,14 +61,14 @@ async function handleMessage(
 		case "CANCEL_SELECTION":
 			return handleCancelSelection();
 		case "REGION_SELECTED":
-			console.log("[SW] Region:", message.payload);
+			handleExtractionPipeline(message.payload).catch(console.error);
 			return { ok: true };
 		case "EXTRACT_REQUEST":
-			console.log("[SW] Extract request (stub)");
-			return { ok: true };
 		case "EXTRACT_PROGRESS":
 		case "EXTRACT_RESULT":
 		case "EXTRACT_ERROR":
+		case "CROP_REQUEST":
+		case "CROP_RESULT":
 			return { ok: true };
 	}
 }
@@ -72,24 +76,20 @@ async function handleMessage(
 // ── Selection handlers ────────────────────────────────────
 
 async function handleStartSelection(): Promise<{ ok: boolean }> {
-	try {
-		const [tab] = await chrome.tabs.query({
-			active: true,
-			currentWindow: true,
-		});
-		if (!tab?.id) throw new Error("No active tab found");
+	const [tab] = await chrome.tabs.query({
+		active: true,
+		currentWindow: true,
+	});
+	if (!tab?.id) throw new Error("No active tab found");
 
-		await chrome.scripting.executeScript({
-			target: { tabId: tab.id },
-			files: ["src/content/overlay.ts"],
-		});
+	await chrome.scripting.executeScript({
+		target: { tabId: tab.id },
+		files: ["src/content/overlay.ts"],
+	});
 
-		await chrome.tabs.sendMessage(tab.id, { type: "START_SELECTION" });
-		return { ok: true };
-	} catch (err) {
-		console.error("[SW] Failed to start selection:", err);
-		throw err;
-	}
+	await chrome.tabs.sendMessage(tab.id, { type: "START_SELECTION" });
+	await updateState({ status: "selecting" });
+	return { ok: true };
 }
 
 async function handleCancelSelection(): Promise<{ ok: boolean }> {
@@ -98,14 +98,188 @@ async function handleCancelSelection(): Promise<{ ok: boolean }> {
 			active: true,
 			currentWindow: true,
 		});
-		if (!tab?.id) throw new Error("No active tab found");
-
-		await chrome.tabs.sendMessage(tab.id, { type: "CANCEL_SELECTION" });
-		return { ok: true };
-	} catch (err) {
-		console.error("[SW] Failed to cancel selection:", err);
-		throw err;
+		if (tab?.id) {
+			await chrome.tabs.sendMessage(tab.id, { type: "CANCEL_SELECTION" });
+		}
+	} catch {
+		// Tab may not be accessible
 	}
+	await updateState({ status: "idle" });
+	chrome.action.setBadgeText({ text: "" });
+	return { ok: true };
+}
+
+// ── Extraction pipeline ───────────────────────────────────
+
+async function handleExtractionPipeline(
+	region: SelectionRegion,
+): Promise<void> {
+	const startedAt = Date.now();
+
+	try {
+		// 1. Capture screenshot
+		await updateState({ status: "capturing", startedAt });
+		chrome.action.setBadgeText({ text: "..." });
+		chrome.action.setBadgeBackgroundColor({ color: "#4F46E5" });
+
+		const screenshotDataUrl = await chrome.tabs.captureVisibleTab({
+			format: "png",
+		});
+
+		// 2. Crop to selection
+		await updateState({ status: "cropping", startedAt });
+
+		const croppedDataUrl = await cropScreenshot(screenshotDataUrl, region);
+
+		// 3. Extract with API
+		await updateState({ status: "extracting", startedAt });
+
+		const apiKey = await getApiKey();
+		if (!apiKey) {
+			throw new Error("No API key configured — set one in Settings");
+		}
+
+		const model = (await get("settings.model")) ?? "claude-haiku-4-5-20251001";
+
+		// Strip data URL prefix for base64
+		const base64 = croppedDataUrl.replace(/^data:image\/png;base64,/, "");
+		const apiResponse = await extractTable(base64, model, apiKey);
+
+		// 4. Parse + validate
+		await updateState({ status: "parsing", startedAt });
+
+		const durationMs = Date.now() - startedAt;
+
+		// 5. Store result
+		await updateState({
+			status: "complete",
+			result: apiResponse.result,
+			imageDataUrl: croppedDataUrl,
+			durationMs,
+			tokensUsed: apiResponse.tokensUsed,
+		});
+
+		// Save to history
+		await saveToHistory({
+			result: apiResponse.result,
+			imageDataUrl: croppedDataUrl,
+			model,
+			tokensUsed: apiResponse.tokensUsed,
+			durationMs,
+		});
+
+		// Update usage counters
+		const totalExtractions = ((await get("usage.totalExtractions")) ?? 0) + 1;
+		const totalTokens =
+			((await get("usage.tokensUsed")) ?? 0) + apiResponse.tokensUsed;
+		await set("usage.totalExtractions", totalExtractions);
+		await set("usage.tokensUsed", totalTokens);
+
+		chrome.action.setBadgeText({ text: "\u2713" });
+		chrome.action.setBadgeBackgroundColor({ color: "#059669" });
+		setTimeout(() => chrome.action.setBadgeText({ text: "" }), 5000);
+
+		console.log(
+			"[SW] Extraction complete:",
+			apiResponse.result.rows.length,
+			"rows in",
+			durationMs,
+			"ms",
+		);
+	} catch (err: unknown) {
+		const message = err instanceof Error ? err.message : "Unknown error";
+		const code =
+			err instanceof Error && "code" in err
+				? String((err as { code: string }).code)
+				: "EXTRACTION_ERROR";
+
+		console.error("[SW] Extraction failed:", message);
+		await updateState({ status: "error", message, code });
+
+		chrome.action.setBadgeText({ text: "!" });
+		chrome.action.setBadgeBackgroundColor({ color: "#DC2626" });
+		setTimeout(() => chrome.action.setBadgeText({ text: "" }), 10000);
+	}
+}
+
+// ── Offscreen crop ────────────────────────────────────────
+
+async function cropScreenshot(
+	imageDataUrl: string,
+	region: SelectionRegion,
+): Promise<string> {
+	// Create offscreen document (guard against "already exists")
+	try {
+		await chrome.offscreen.createDocument({
+			url: "src/offscreen/offscreen.html",
+			reasons: ["CANVAS" as chrome.offscreen.Reason],
+			justification: "Crop screenshot to selection region",
+		});
+	} catch (err: unknown) {
+		if (
+			!(err instanceof Error) ||
+			!err.message.includes("Only a single offscreen")
+		) {
+			throw err;
+		}
+	}
+
+	const response = (await chrome.runtime.sendMessage({
+		type: "CROP_REQUEST",
+		payload: { imageDataUrl, region },
+	})) as { type: string; payload: { croppedDataUrl: string } };
+
+	try {
+		await chrome.offscreen.closeDocument();
+	} catch {
+		// May already be closed
+	}
+
+	if (response?.type === "EXTRACT_ERROR") {
+		const errPayload = (response as unknown as { payload: { message: string } })
+			.payload;
+		throw new Error(errPayload.message);
+	}
+
+	return response.payload.croppedDataUrl;
+}
+
+// ── State management ──────────────────────────────────────
+
+async function updateState(state: ExtractionState): Promise<void> {
+	await setExtractionState(state);
+}
+
+// ── History persistence ───────────────────────────────────
+
+async function saveToHistory(entry: {
+	result: ExtractionRecord["result"];
+	imageDataUrl: string;
+	model: string;
+	tokensUsed: number;
+	durationMs: number;
+}): Promise<void> {
+	const [tab] = await chrome.tabs.query({
+		active: true,
+		currentWindow: true,
+	});
+
+	const record: ExtractionRecord = {
+		id: crypto.randomUUID(),
+		timestamp: Date.now(),
+		url: tab?.url ?? "",
+		pageTitle: tab?.title ?? "",
+		imageDataUrl: entry.imageDataUrl,
+		result: entry.result,
+		model: entry.model,
+		tokensUsed: entry.tokensUsed,
+		durationMs: entry.durationMs,
+	};
+
+	const history = (await get("history.extractions")) ?? [];
+	history.unshift(record);
+	if (history.length > 50) history.length = 50;
+	await set("history.extractions", history);
 }
 
 // ── Keyboard shortcut ─────────────────────────────────────

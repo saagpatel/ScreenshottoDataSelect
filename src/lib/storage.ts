@@ -1,4 +1,9 @@
-import type { ModelId, OutputFormat, StorageSchema } from "../types";
+import type {
+	ExtractionState,
+	ModelId,
+	OutputFormat,
+	StorageSchema,
+} from "../types";
 
 // ── Defaults ──────────────────────────────────────────────
 
@@ -9,6 +14,7 @@ const DEFAULTS: Partial<StorageSchema> = {
 	"history.extractions": [],
 	"usage.totalExtractions": 0,
 	"usage.tokensUsed": 0,
+	"extraction.current": { status: "idle" } as ExtractionState,
 };
 
 // ── Generic accessors ─────────────────────────────────────
@@ -81,4 +87,18 @@ export async function setSettings(settings: Partial<Settings>): Promise<void> {
 	if (settings.autoClipboard !== undefined)
 		items["settings.autoClipboard"] = settings.autoClipboard;
 	await chrome.storage.local.set(items);
+}
+
+// ── Extraction state ──────────────────────────────────────
+
+export async function getExtractionState(): Promise<ExtractionState> {
+	return (
+		(await get("extraction.current")) ?? ({ status: "idle" } as ExtractionState)
+	);
+}
+
+export async function setExtractionState(
+	state: ExtractionState,
+): Promise<void> {
+	await set("extraction.current", state);
 }

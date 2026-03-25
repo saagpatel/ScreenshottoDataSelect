@@ -50,6 +50,35 @@ export interface ExtractionRecord {
 	durationMs: number;
 }
 
+// ── Extraction State Machine ──────────────────────────────
+
+export type ExtractionState =
+	| { status: "idle" }
+	| { status: "selecting" }
+	| {
+			status: "capturing" | "cropping" | "extracting" | "parsing";
+			startedAt: number;
+	  }
+	| {
+			status: "complete";
+			result: ExtractionResult;
+			imageDataUrl: string;
+			durationMs: number;
+			tokensUsed: number;
+	  }
+	| { status: "error"; message: string; code: string };
+
+// ── Crop (offscreen document) ─────────────────────────────
+
+export interface CropRequest {
+	imageDataUrl: string;
+	region: SelectionRegion;
+}
+
+export interface CropResult {
+	croppedDataUrl: string;
+}
+
 // ── Storage ───────────────────────────────────────────────
 
 export interface StorageSchema {
@@ -60,4 +89,5 @@ export interface StorageSchema {
 	"history.extractions": ExtractionRecord[];
 	"usage.totalExtractions": number;
 	"usage.tokensUsed": number;
+	"extraction.current": ExtractionState;
 }
