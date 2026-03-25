@@ -1,4 +1,5 @@
 import type {
+	ExtractionRecord,
 	ExtractionState,
 	ModelId,
 	OutputFormat,
@@ -101,4 +102,14 @@ export async function setExtractionState(
 	state: ExtractionState,
 ): Promise<void> {
 	await set("extraction.current", state);
+}
+
+// ── History ───────────────────────────────────────────────
+
+export async function getHistory(): Promise<ExtractionRecord[]> {
+	return (await get("history.extractions")) ?? [];
+}
+
+export async function clearHistory(): Promise<void> {
+	await set("history.extractions", []);
 }

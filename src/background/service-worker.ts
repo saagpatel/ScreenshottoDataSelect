@@ -290,4 +290,20 @@ chrome.commands.onCommand.addListener((command) => {
 	}
 });
 
+// ── Context menu ──────────────────────────────────────────
+
+chrome.runtime.onInstalled.addListener(() => {
+	chrome.contextMenus.create({
+		id: "dataselect-extract",
+		title: "Extract table from this area",
+		contexts: ["page"],
+	});
+});
+
+chrome.contextMenus.onClicked.addListener((info) => {
+	if (info.menuItemId === "dataselect-extract") {
+		handleStartSelection().catch(console.error);
+	}
+});
+
 console.log("[SW] Screenshot to DataSelect service worker loaded");
