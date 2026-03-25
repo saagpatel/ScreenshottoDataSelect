@@ -3,6 +3,7 @@ import { type ExtensionMessage, isExtensionMessage } from "../lib/messages";
 import { get, getApiKey, set, setExtractionState } from "../lib/storage";
 import type {
 	ExtractionRecord,
+	ExtractionResult,
 	ExtractionState,
 	SelectionRegion,
 } from "../types";
@@ -63,12 +64,15 @@ async function handleMessage(
 		case "REGION_SELECTED":
 			handleExtractionPipeline(message.payload).catch(console.error);
 			return { ok: true };
-		case "EXTRACT_REQUEST":
 		case "EXTRACT_PROGRESS":
 		case "EXTRACT_RESULT":
 		case "EXTRACT_ERROR":
 		case "CROP_REQUEST":
 		case "CROP_RESULT":
+		case "DOM_EXTRACT_REQUEST":
+		case "DOM_EXTRACT_RESULT":
+		case "DETECT_TABLES":
+		case "TABLES_DETECTED":
 			return { ok: true };
 	}
 }
@@ -83,7 +87,7 @@ async function handleStartSelection(): Promise<{ ok: boolean }> {
 	if (!tab?.id) throw new Error("No active tab found");
 
 	await chrome.scripting.executeScript({
-		target: { tabId: tab.id },
+		target: { tabId: tab.id, allFrames: true },
 		files: ["src/content/overlay.ts"],
 	});
 
@@ -131,47 +135,94 @@ async function handleExtractionPipeline(
 
 		const croppedDataUrl = await cropScreenshot(screenshotDataUrl, region);
 
-		// 3. Extract with API
-		await updateState({ status: "extracting", startedAt });
+		// 3. Try DOM extraction first (if enabled)
+		const domFirst = (await get("settings.domFirst")) ?? true;
+		let finalResult: ExtractionResult | null = null;
+		let tokensUsed = 0;
 
-		const apiKey = await getApiKey();
-		if (!apiKey) {
-			throw new Error("No API key configured — set one in Settings");
+		if (domFirst) {
+			await updateState({ status: "dom-extracting", startedAt });
+
+			const [tab] = await chrome.tabs.query({
+				active: true,
+				currentWindow: true,
+			});
+			if (tab?.id) {
+				try {
+					const domResponse = (await chrome.tabs.sendMessage(tab.id, {
+						type: "DOM_EXTRACT_REQUEST",
+						payload: region,
+					})) as { type: string; payload: ExtractionResult | null };
+
+					if (
+						domResponse?.type === "DOM_EXTRACT_RESULT" &&
+						domResponse.payload &&
+						domResponse.payload.rows.length > 0
+					) {
+						finalResult = domResponse.payload;
+						console.log(
+							"[SW] DOM extraction succeeded:",
+							finalResult.rows.length,
+							"rows",
+						);
+					}
+				} catch {
+					// Content script may not support DOM extraction yet
+				}
+			}
 		}
 
-		const model = (await get("settings.model")) ?? "claude-haiku-4-5-20251001";
+		// 4. Fall back to Vision API if DOM extraction didn't work
+		if (!finalResult) {
+			await updateState({ status: "extracting", startedAt });
 
-		// Strip data URL prefix for base64
-		const base64 = croppedDataUrl.replace(/^data:image\/png;base64,/, "");
-		const apiResponse = await extractTable(base64, model, apiKey);
+			const apiKey = await getApiKey();
+			if (!apiKey) {
+				throw new Error("No API key configured — set one in Settings");
+			}
 
-		// 4. Parse + validate
+			const model =
+				(await get("settings.model")) ?? "claude-haiku-4-5-20251001";
+
+			const base64 = croppedDataUrl.replace(/^data:image\/png;base64,/, "");
+			const apiResponse = await extractTable(base64, model, apiKey);
+
+			finalResult = apiResponse.result;
+			tokensUsed = apiResponse.totalTokens;
+
+			// Update split token counters
+			const prevInput = (await get("usage.inputTokens")) ?? 0;
+			const prevOutput = (await get("usage.outputTokens")) ?? 0;
+			await set("usage.inputTokens", prevInput + apiResponse.inputTokens);
+			await set("usage.outputTokens", prevOutput + apiResponse.outputTokens);
+		}
+
+		// 5. Parse + validate
 		await updateState({ status: "parsing", startedAt });
 
 		const durationMs = Date.now() - startedAt;
+		const model = (await get("settings.model")) ?? "claude-haiku-4-5-20251001";
 
-		// 5. Store result
+		// 6. Store result
 		await updateState({
 			status: "complete",
-			result: apiResponse.result,
+			result: finalResult,
 			imageDataUrl: croppedDataUrl,
 			durationMs,
-			tokensUsed: apiResponse.tokensUsed,
+			tokensUsed,
 		});
 
-		// Save to history
 		await saveToHistory({
-			result: apiResponse.result,
+			result: finalResult,
 			imageDataUrl: croppedDataUrl,
 			model,
-			tokensUsed: apiResponse.tokensUsed,
+			tokensUsed,
 			durationMs,
 		});
 
 		// Update usage counters
 		const totalExtractions = ((await get("usage.totalExtractions")) ?? 0) + 1;
-		const totalTokens =
-			((await get("usage.tokensUsed")) ?? 0) + apiResponse.tokensUsed;
+		const totalTokens = ((await get("usage.tokensUsed")) ?? 0) + tokensUsed;
 		await set("usage.totalExtractions", totalExtractions);
 		await set("usage.tokensUsed", totalTokens);
 
@@ -181,10 +232,11 @@ async function handleExtractionPipeline(
 
 		console.log(
 			"[SW] Extraction complete:",
-			apiResponse.result.rows.length,
+			finalResult.rows.length,
 			"rows in",
 			durationMs,
 			"ms",
+			finalResult.extractionMethod === "dom" ? "(DOM)" : "(Vision)",
 		);
 	} catch (err: unknown) {
 		const message = err instanceof Error ? err.message : "Unknown error";

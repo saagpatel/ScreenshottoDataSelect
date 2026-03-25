@@ -99,6 +99,21 @@ export default function ExportBar({
 				</svg>
 				Download {formatExtension(defaultFormat).toUpperCase()}
 			</button>
+			<button
+				type="button"
+				onClick={() => {
+					handleCopy("tsv");
+					window.open("https://docs.google.com/spreadsheets/create", "_blank");
+				}}
+				className="w-full py-1.5 text-xs font-medium text-emerald-600 bg-white border border-emerald-200
+							 rounded-md hover:border-emerald-300 hover:bg-emerald-50 transition-colors min-h-[32px]
+							 flex items-center justify-center gap-1.5"
+			>
+				<svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor">
+					<path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+				</svg>
+				Open in Google Sheets
+			</button>
 		</div>
 	);
 }

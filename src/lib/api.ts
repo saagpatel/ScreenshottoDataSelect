@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { ExtractionResult, ModelId } from "../types";
-import { getTableExtractionPrompt } from "./prompts";
+import type { ExtractionMode, ExtractionResult, ModelId } from "../types";
+import { getExtractionPrompt } from "./prompts";
 
 // ── Error types ───────────────────────────────────────────
 
@@ -34,8 +34,10 @@ export class ExtractionError extends Error {
 
 // ── API response types ────────────────────────────────────
 
-interface ApiExtractionResponse {
-	tokensUsed: number;
+export interface ApiExtractionResponse {
+	inputTokens: number;
+	outputTokens: number;
+	totalTokens: number;
 	result: ExtractionResult;
 }
 
@@ -45,6 +47,7 @@ export async function extractTable(
 	imageBase64: string,
 	model: ModelId,
 	apiKey: string,
+	mode: ExtractionMode = "table",
 ): Promise<ApiExtractionResponse> {
 	if (!apiKey) throw new ApiKeyError();
 
@@ -72,7 +75,7 @@ export async function extractTable(
 						},
 						{
 							type: "text",
-							text: getTableExtractionPrompt(),
+							text: getExtractionPrompt(mode),
 						},
 					],
 				},
@@ -91,8 +94,9 @@ export async function extractTable(
 		throw new ExtractionError("Unknown API error");
 	}
 
-	const tokensUsed =
-		(response.usage?.input_tokens ?? 0) + (response.usage?.output_tokens ?? 0);
+	const inputTokens = response.usage?.input_tokens ?? 0;
+	const outputTokens = response.usage?.output_tokens ?? 0;
+	const totalTokens = inputTokens + outputTokens;
 
 	const textBlock = response.content.find((b) => b.type === "text");
 	if (!textBlock || textBlock.type !== "text") {
@@ -100,15 +104,17 @@ export async function extractTable(
 	}
 
 	const rawResponse = textBlock.text;
-	const result = parseExtractionResponse(rawResponse);
+	const result = parseExtractionResponse(rawResponse, mode);
 
-	return { tokensUsed, result };
+	return { inputTokens, outputTokens, totalTokens, result };
 }
 
 // ── Response parsing ──────────────────────────────────────
 
-function parseExtractionResponse(raw: string): ExtractionResult {
-	// Strip markdown code fences if present
+function parseExtractionResponse(
+	raw: string,
+	mode: ExtractionMode,
+): ExtractionResult {
 	let cleaned = raw.trim();
 	if (cleaned.startsWith("```")) {
 		cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
@@ -145,5 +151,17 @@ function parseExtractionResponse(raw: string): ExtractionResult {
 			? Math.max(0, Math.min(1, obj.confidence))
 			: 0.5;
 
-	return { headers, rows, confidence, rawResponse: raw };
+	const chartType =
+		mode === "chart" && typeof obj.chartType === "string"
+			? obj.chartType
+			: undefined;
+
+	return {
+		headers,
+		rows,
+		confidence,
+		rawResponse: raw,
+		extractionMethod: "vision",
+		chartType,
+	};
 }

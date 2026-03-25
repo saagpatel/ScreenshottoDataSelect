@@ -10,16 +10,21 @@ export interface SelectionRegion {
 
 // ── Extraction ────────────────────────────────────────────
 
+export type ExtractionMethod = "dom" | "vision";
+
 export interface ExtractionResult {
 	headers: string[];
 	rows: string[][];
 	confidence: number;
 	rawResponse: string;
+	extractionMethod?: ExtractionMethod;
+	chartType?: string;
 }
 
 export type ExtractionStage =
 	| "capturing"
 	| "cropping"
+	| "dom-extracting"
 	| "extracting"
 	| "parsing"
 	| "complete";
@@ -30,10 +35,10 @@ export type ModelId =
 	| "claude-haiku-4-5-20251001"
 	| "claude-sonnet-4-5-20250514";
 
-export interface ExtractRequest {
-	imageBase64: string;
-	model: ModelId;
-	outputFormat: OutputFormat;
+export type ExtractionMode = "table" | "chart";
+
+export interface DetectedRegion extends SelectionRegion {
+	label: string;
 }
 
 // ── History ───────────────────────────────────────────────
@@ -56,7 +61,12 @@ export type ExtractionState =
 	| { status: "idle" }
 	| { status: "selecting" }
 	| {
-			status: "capturing" | "cropping" | "extracting" | "parsing";
+			status:
+				| "capturing"
+				| "cropping"
+				| "dom-extracting"
+				| "extracting"
+				| "parsing";
 			startedAt: number;
 	  }
 	| {
@@ -86,8 +96,11 @@ export interface StorageSchema {
 	"settings.model": ModelId;
 	"settings.defaultFormat": OutputFormat;
 	"settings.autoClipboard": boolean;
+	"settings.domFirst": boolean;
 	"history.extractions": ExtractionRecord[];
 	"usage.totalExtractions": number;
 	"usage.tokensUsed": number;
+	"usage.inputTokens": number;
+	"usage.outputTokens": number;
 	"extraction.current": ExtractionState;
 }

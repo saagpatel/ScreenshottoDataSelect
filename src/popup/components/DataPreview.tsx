@@ -1,4 +1,5 @@
-import type { ExtractionResult, OutputFormat } from "../../types";
+import { calculateCost, formatCost } from "../../lib/cost";
+import type { ExtractionResult, ModelId, OutputFormat } from "../../types";
 import ExportBar from "./ExportBar";
 
 interface DataPreviewProps {
@@ -6,8 +7,10 @@ interface DataPreviewProps {
 	imageDataUrl?: string;
 	durationMs?: number;
 	tokensUsed?: number;
+	model?: ModelId;
 	defaultFormat?: OutputFormat;
 	onReset: () => void;
+	onReExtract?: () => void;
 }
 
 export default function DataPreview({
@@ -15,8 +18,10 @@ export default function DataPreview({
 	imageDataUrl,
 	durationMs,
 	tokensUsed,
+	model,
 	defaultFormat,
 	onReset,
+	onReExtract,
 }: DataPreviewProps) {
 	const { headers, rows, confidence } = result;
 
@@ -31,7 +36,17 @@ export default function DataPreview({
 		<div className="flex flex-col gap-3">
 			{/* Header row: meta + new button */}
 			<div className="flex items-center justify-between">
-				<div className="flex items-center gap-2 text-xs text-slate-500">
+				<div className="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
+					{/* Extraction method badge */}
+					{result.extractionMethod === "dom" ? (
+						<span className="px-1.5 py-0.5 rounded font-medium bg-emerald-100 text-emerald-700">
+							HTML
+						</span>
+					) : result.extractionMethod === "vision" ? (
+						<span className="px-1.5 py-0.5 rounded font-medium bg-indigo-100 text-indigo-700">
+							AI
+						</span>
+					) : null}
 					<span
 						className={`px-1.5 py-0.5 rounded font-medium ${confidenceColor}`}
 					>
@@ -43,8 +58,24 @@ export default function DataPreview({
 					{durationMs !== undefined && (
 						<span>{(durationMs / 1000).toFixed(1)}s</span>
 					)}
-					{tokensUsed !== undefined && (
-						<span>{tokensUsed.toLocaleString()} tok</span>
+					{tokensUsed !== undefined && tokensUsed > 0 && (
+						<span>
+							{tokensUsed.toLocaleString()} tok
+							{model && (
+								<>
+									{" "}
+									(
+									{formatCost(
+										calculateCost(
+											model,
+											Math.round(tokensUsed * 0.9),
+											Math.round(tokensUsed * 0.1),
+										),
+									)}
+									)
+								</>
+							)}
+						</span>
 					)}
 				</div>
 				<button
@@ -69,6 +100,17 @@ export default function DataPreview({
 					</svg>
 				</button>
 			</div>
+
+			{/* Re-extract with AI (for DOM extractions) */}
+			{result.extractionMethod === "dom" && onReExtract && (
+				<button
+					type="button"
+					onClick={onReExtract}
+					className="text-xs text-indigo-600 hover:text-indigo-800 transition-colors text-left"
+				>
+					Re-extract with AI for more accuracy
+				</button>
+			)}
 
 			{/* Thumbnail */}
 			{imageDataUrl && (

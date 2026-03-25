@@ -54,6 +54,7 @@ describe("storage wrapper", () => {
 				model: "claude-haiku-4-5-20251001",
 				defaultFormat: "csv",
 				autoClipboard: true,
+				domFirst: true,
 			});
 		});
 

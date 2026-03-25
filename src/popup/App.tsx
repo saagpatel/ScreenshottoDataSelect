@@ -41,6 +41,7 @@ export default function App() {
 	const isActive =
 		state.status === "capturing" ||
 		state.status === "cropping" ||
+		state.status === "dom-extracting" ||
 		state.status === "extracting" ||
 		state.status === "parsing";
 

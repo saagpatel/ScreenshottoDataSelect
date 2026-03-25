@@ -144,7 +144,7 @@ function onKeyDown(e: KeyboardEvent): void {
 // ── Message listener ──────────────────────────────────────
 
 chrome.runtime.onMessage.addListener(
-	(message: { type: string }, _sender, sendResponse) => {
+	(message: { type: string; payload?: unknown }, _sender, sendResponse) => {
 		switch (message.type) {
 			case "START_SELECTION":
 				createOverlay();
@@ -154,6 +154,31 @@ chrome.runtime.onMessage.addListener(
 				removeOverlay();
 				sendResponse({ ok: true });
 				break;
+			case "DOM_EXTRACT_REQUEST": {
+				// Dynamic import to keep dom-extractor separate
+				import("./dom-extractor")
+					.then(({ extractTableFromRegion }) => {
+						const region = message.payload as {
+							x: number;
+							y: number;
+							width: number;
+							height: number;
+							devicePixelRatio: number;
+						};
+						const result = extractTableFromRegion(region);
+						sendResponse({
+							type: "DOM_EXTRACT_RESULT",
+							payload: result,
+						});
+					})
+					.catch(() => {
+						sendResponse({
+							type: "DOM_EXTRACT_RESULT",
+							payload: null,
+						});
+					});
+				return true; // async response
+			}
 		}
 		return false;
 	},

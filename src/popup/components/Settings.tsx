@@ -1,4 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { calculateCost, formatCost } from "../../lib/cost";
+import { get } from "../../lib/storage";
 import type { ModelId, OutputFormat } from "../../types";
 import { useSettings } from "../hooks/useSettings";
 
@@ -7,12 +9,37 @@ export default function Settings() {
 	const [showKey, setShowKey] = useState(false);
 	const [toast, setToast] = useState<string | null>(null);
 
+	// Usage stats
+	const [usage, setUsage] = useState<{
+		totalExtractions: number;
+		totalTokens: number;
+		inputTokens: number;
+		outputTokens: number;
+	} | null>(null);
+
+	useEffect(() => {
+		Promise.all([
+			get("usage.totalExtractions"),
+			get("usage.tokensUsed"),
+			get("usage.inputTokens"),
+			get("usage.outputTokens"),
+		]).then(([total, tokens, input, output]) => {
+			setUsage({
+				totalExtractions: (total as number) ?? 0,
+				totalTokens: (tokens as number) ?? 0,
+				inputTokens: (input as number) ?? 0,
+				outputTokens: (output as number) ?? 0,
+			});
+		});
+	}, []);
+
 	// Local draft state for the form
 	const [draft, setDraft] = useState<{
 		apiKey: string;
 		model: ModelId;
 		defaultFormat: OutputFormat;
 		autoClipboard: boolean;
+		domFirst: boolean;
 	} | null>(null);
 
 	// Initialize draft from loaded settings
@@ -24,6 +51,7 @@ export default function Settings() {
 					model: settings.model,
 					defaultFormat: settings.defaultFormat,
 					autoClipboard: settings.autoClipboard,
+					domFirst: settings.domFirst,
 				}
 			: null);
 
@@ -35,6 +63,7 @@ export default function Settings() {
 				model: form.model,
 				defaultFormat: form.defaultFormat,
 				autoClipboard: form.autoClipboard,
+				domFirst: form.domFirst,
 			});
 			setDraft(null);
 			setToast("Settings saved");
@@ -192,6 +221,25 @@ export default function Settings() {
 				</span>
 			</label>
 
+			{/* DOM-first toggle */}
+			<label className="flex items-center gap-3 cursor-pointer">
+				<input
+					type="checkbox"
+					checked={form.domFirst}
+					onChange={(e) => updateDraft({ domFirst: e.target.checked })}
+					className="w-4 h-4 rounded border-slate-300 text-indigo-600
+                     focus:ring-2 focus:ring-indigo-500"
+				/>
+				<div>
+					<span className="text-sm text-slate-700">
+						Try HTML extraction first
+					</span>
+					<p className="text-xs text-slate-400">
+						Instant &amp; free for standard HTML tables
+					</p>
+				</div>
+			</label>
+
 			{/* Save */}
 			<button
 				type="button"
@@ -208,6 +256,41 @@ export default function Settings() {
 			{toast && (
 				<div className="text-center text-sm text-emerald-600 font-medium animate-pulse">
 					{toast}
+				</div>
+			)}
+
+			{/* Usage Stats */}
+			{usage && usage.totalExtractions > 0 && (
+				<div className="border border-slate-200 rounded-lg p-3 bg-white">
+					<p className="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">
+						Usage
+					</p>
+					<div className="flex flex-col gap-1 text-xs text-slate-500">
+						<div className="flex justify-between">
+							<span>Extractions</span>
+							<span className="font-medium">{usage.totalExtractions}</span>
+						</div>
+						<div className="flex justify-between">
+							<span>Total tokens</span>
+							<span className="font-medium">
+								{usage.totalTokens.toLocaleString()}
+							</span>
+						</div>
+						{usage.totalTokens > 0 && form && (
+							<div className="flex justify-between">
+								<span>Estimated cost</span>
+								<span className="font-medium">
+									{formatCost(
+										calculateCost(
+											form.model,
+											usage.inputTokens || Math.round(usage.totalTokens * 0.9),
+											usage.outputTokens || Math.round(usage.totalTokens * 0.1),
+										),
+									)}
+								</span>
+							</div>
+						)}
+					</div>
 				</div>
 			)}
 

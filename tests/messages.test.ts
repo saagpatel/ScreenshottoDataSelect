@@ -23,6 +23,26 @@ describe("isExtensionMessage", () => {
 		expect(isExtensionMessage({ type: "CROP_RESULT" })).toBe(true);
 	});
 
+	it("accepts DOM_EXTRACT_REQUEST", () => {
+		expect(isExtensionMessage({ type: "DOM_EXTRACT_REQUEST" })).toBe(true);
+	});
+
+	it("accepts DOM_EXTRACT_RESULT", () => {
+		expect(isExtensionMessage({ type: "DOM_EXTRACT_RESULT" })).toBe(true);
+	});
+
+	it("accepts DETECT_TABLES", () => {
+		expect(isExtensionMessage({ type: "DETECT_TABLES" })).toBe(true);
+	});
+
+	it("accepts TABLES_DETECTED", () => {
+		expect(isExtensionMessage({ type: "TABLES_DETECTED" })).toBe(true);
+	});
+
+	it("rejects removed EXTRACT_REQUEST", () => {
+		expect(isExtensionMessage({ type: "EXTRACT_REQUEST" })).toBe(false);
+	});
+
 	it("rejects null", () => {
 		expect(isExtensionMessage(null)).toBe(false);
 	});

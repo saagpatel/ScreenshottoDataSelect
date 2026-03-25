@@ -3,12 +3,20 @@ import type { ExtractionState } from "../../types";
 
 type ActiveStage = Extract<
 	ExtractionState,
-	{ status: "capturing" | "cropping" | "extracting" | "parsing" }
+	{
+		status:
+			| "capturing"
+			| "cropping"
+			| "dom-extracting"
+			| "extracting"
+			| "parsing";
+	}
 >;
 
 const STAGE_LABELS: Record<ActiveStage["status"], string> = {
 	capturing: "Capturing screenshot...",
 	cropping: "Cropping selection...",
+	"dom-extracting": "Checking HTML tables...",
 	extracting: "Extracting data with AI...",
 	parsing: "Parsing response...",
 };
@@ -16,6 +24,7 @@ const STAGE_LABELS: Record<ActiveStage["status"], string> = {
 const STAGE_ORDER: ActiveStage["status"][] = [
 	"capturing",
 	"cropping",
+	"dom-extracting",
 	"extracting",
 	"parsing",
 ];

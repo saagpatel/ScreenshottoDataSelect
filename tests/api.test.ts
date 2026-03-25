@@ -56,7 +56,10 @@ describe("extractTable", () => {
 		expect(result.result.headers).toEqual(["Name", "Age"]);
 		expect(result.result.rows).toHaveLength(2);
 		expect(result.result.confidence).toBe(0.95);
-		expect(result.tokensUsed).toBe(1200);
+		expect(result.result.extractionMethod).toBe("vision");
+		expect(result.totalTokens).toBe(1200);
+		expect(result.inputTokens).toBe(1000);
+		expect(result.outputTokens).toBe(200);
 	});
 
 	it("strips markdown code fences from response", async () => {

@@ -12,9 +12,12 @@ const DEFAULTS: Partial<StorageSchema> = {
 	"settings.model": "claude-haiku-4-5-20251001" as ModelId,
 	"settings.defaultFormat": "csv" as OutputFormat,
 	"settings.autoClipboard": true,
+	"settings.domFirst": true,
 	"history.extractions": [],
 	"usage.totalExtractions": 0,
 	"usage.tokensUsed": 0,
+	"usage.inputTokens": 0,
+	"usage.outputTokens": 0,
 	"extraction.current": { status: "idle" } as ExtractionState,
 };
 
@@ -55,6 +58,7 @@ export interface Settings {
 	model: ModelId;
 	defaultFormat: OutputFormat;
 	autoClipboard: boolean;
+	domFirst: boolean;
 }
 
 export async function getSettings(): Promise<Settings> {
@@ -63,6 +67,7 @@ export async function getSettings(): Promise<Settings> {
 		"settings.model",
 		"settings.defaultFormat",
 		"settings.autoClipboard",
+		"settings.domFirst",
 	]);
 
 	return {
@@ -76,6 +81,9 @@ export async function getSettings(): Promise<Settings> {
 		autoClipboard:
 			(result["settings.autoClipboard"] as boolean) ??
 			(DEFAULTS["settings.autoClipboard"] as boolean),
+		domFirst:
+			(result["settings.domFirst"] as boolean) ??
+			(DEFAULTS["settings.domFirst"] as boolean),
 	};
 }
 
@@ -87,6 +95,8 @@ export async function setSettings(settings: Partial<Settings>): Promise<void> {
 		items["settings.defaultFormat"] = settings.defaultFormat;
 	if (settings.autoClipboard !== undefined)
 		items["settings.autoClipboard"] = settings.autoClipboard;
+	if (settings.domFirst !== undefined)
+		items["settings.domFirst"] = settings.domFirst;
 	await chrome.storage.local.set(items);
 }
 

@@ -1,4 +1,11 @@
 /* Selection overlay styles — injected into host page */
+/* Force light color scheme so overlay contrasts on dark mode pages */
+#dataselect-overlay,
+#dataselect-selection-rect,
+#dataselect-dimension-badge {
+	color-scheme: light;
+}
+
 #dataselect-overlay {
 	position: fixed;
 	top: 0;
