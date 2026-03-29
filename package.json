@@ -14,7 +14,7 @@
 	"dependencies": {
 		"@anthropic-ai/sdk": "0.80.0",
 		"react": "18.3.1",
-		"react-dom": "18.3.1"
+		"react-dom": "19.2.4"
 	},
 	"devDependencies": {
 		"@crxjs/vite-plugin": "2.4.0",
@@ -22,7 +22,7 @@
 		"@testing-library/react": "16.3.2",
 		"@types/chrome": "0.1.38",
 		"@types/react": "18.3.28",
-		"@types/react-dom": "18.3.7",
+		"@types/react-dom": "19.2.3",
 		"@vitejs/plugin-react": "4.7.0",
 		"autoprefixer": "10.4.27",
 		"jsdom": "29.0.1",
