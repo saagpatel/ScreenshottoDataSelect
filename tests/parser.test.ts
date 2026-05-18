@@ -134,6 +134,16 @@ describe("toMarkdown", () => {
 		};
 		expect(toMarkdown(result)).toContain("a\\|b");
 	});
+
+	it("escapes backslashes before markdown control characters", () => {
+		const result: ExtractionResult = {
+			headers: ["A"],
+			rows: [["C:\\tmp|report"]],
+			confidence: 1,
+			rawResponse: "",
+		};
+		expect(toMarkdown(result)).toContain("C:\\\\tmp\\|report");
+	});
 });
 
 describe("toFormat", () => {
