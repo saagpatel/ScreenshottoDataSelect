@@ -39,7 +39,7 @@ export function toTSV(result: ExtractionResult): string {
 // ── Markdown (GFM) ───────────────────────────────────────
 
 function mdEscape(value: string): string {
-	return value.replace(/\|/g, "\\|").replace(/\n/g, "<br>");
+	return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, "<br>");
 }
 
 export function toMarkdown(result: ExtractionResult): string {
