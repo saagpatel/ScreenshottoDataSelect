@@ -7,7 +7,7 @@ A Chrome Extension (Manifest V3) that lets users select any visible table or cha
 - **Vite 6.x + @crxjs/vite-plugin 2.x (beta)** — build system with Chrome extension HMR
 - **React 18.3+** — popup UI and history view
 - **Tailwind CSS 3.4+** — popup styling
-- **@anthropic-ai/sdk 0.52+** — Vision API calls
+- **@anthropic-ai/sdk 0.80+** — Vision API calls
 - **Chrome MV3 APIs** — tabs, scripting, storage, offscreenDocument
 - **Vanilla JS** — content script overlay (no React in content scripts)
 
@@ -28,11 +28,11 @@ npm run dev        # development build with HMR
 Load the `dist/` directory as an unpacked extension in `chrome://extensions`. API key configured in extension settings (stored in `chrome.storage.local`).
 
 ## Architecture
-- `src/service-worker/` — message routing hub; all API calls and storage ops go here
+- `src/background/` — message routing hub; all API calls and storage ops go here
 - `src/content/` — vanilla JS overlay for region selection (no React — avoids host page conflicts)
 - `src/popup/` — React UI: extraction view, history view, settings view (3-view navigation)
 - `src/lib/messages.ts` — typed `ExtensionMessage` union discriminants for all IPC
-- `src/lib/extraction.ts` — DOM-first extraction logic; Vision API as fallback
+- `src/content/dom-extractor.ts` — DOM-first extraction logic; Vision API (`src/lib/api.ts`) as fallback
 - Offscreen document handles canvas operations (screenshot cropping, thumbnail compression)
 - API key stored only in `chrome.storage.local`, only sent to `api.anthropic.com`
 - History capped at 50 entries with thumbnail compression to stay within storage limits
@@ -63,7 +63,7 @@ Phase 3 complete — all planned phases shipped:
 - **Vite 6.x + @crxjs/vite-plugin 2.x (beta)** — build system with Chrome extension HMR
 - **React 18.3+** — popup UI and history view
 - **Tailwind CSS 3.4+** — popup styling
-- **@anthropic-ai/sdk 0.52+** — Vision API calls
+- **@anthropic-ai/sdk 0.80+** — Vision API calls
 - **Chrome MV3 APIs** — tabs, scripting, storage, offscreenDocument
 - **Vanilla JS** — content script overlay (no React in content scripts)
 

@@ -49,7 +49,7 @@ npm run typecheck
 
 ## Architecture
 
-A content script injects the selection overlay and attempts DOM extraction on the captured region. If no table is found, it crops the page screenshot and sends it to a background service worker that proxies the Anthropic Vision API call. Results are posted back to the popup via Chrome messaging, where the user picks a format and copies or downloads the data.
+A content script injects the selection overlay. When a region is confirmed, the background service worker captures the screenshot and crops it via an offscreen document. The service worker then asks the content script to attempt DOM extraction on the region. If no table is found, the service worker sends the cropped image to the Anthropic Vision API. Results are posted back to the popup via Chrome messaging, where the user picks a format and copies or downloads the data.
 
 ## License
 
