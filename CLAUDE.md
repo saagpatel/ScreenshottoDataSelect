@@ -88,3 +88,8 @@ Load the `dist/` directory as an unpacked extension in `chrome://extensions`. AP
 Use this context plus the README and supporting docs to resume the next active task, then promote the repo beyond minimum-viable by capturing a dedicated handoff, roadmap, or discovery artifact.
 
 <!-- portfolio-context:end -->
+
+<!-- secondbrain-breadcrumb -->
+## SecondBrain knowledge vault
+
+Prior lessons, decisions, and context for this project live in SecondBrain at `wiki/maps/projects/screenshottodata-select.md`. The whole vault is searchable via the `engraph` MCP — query it for this project + its stack before non-trivial work.
