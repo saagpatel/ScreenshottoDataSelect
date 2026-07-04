@@ -1,36 +1,36 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock the Anthropic SDK before importing api.ts
-vi.mock("@anthropic-ai/sdk", () => {
-	const mockCreate = vi.fn();
-	return {
-		default: class Anthropic {
-			messages = { create: mockCreate };
-			static AuthenticationError = class extends Error {
-				status = 401;
-			};
-			static RateLimitError = class extends Error {
-				status = 429;
-			};
-		},
-		__mockCreate: mockCreate,
-	};
-});
-
-// Get the mock reference — use type assertion for the test-only export
-const { __mockCreate: mockCreate } = (await import(
-	"@anthropic-ai/sdk"
-)) as unknown as {
-	__mockCreate: ReturnType<typeof vi.fn>;
-};
-
-const { extractTable, ApiKeyError, ExtractionError } = await import(
+const { extractTable, ApiKeyError, ExtractionError, RateLimitError } = await import(
 	"../src/lib/api"
 );
 
 describe("extractTable", () => {
+	const mockFetch = vi.fn<typeof fetch>();
+
+	beforeEach(() => {
+		vi.stubGlobal("fetch", mockFetch);
+	});
+
+	afterEach(() => {
+		mockFetch.mockReset();
+		vi.unstubAllGlobals();
+	});
+
+	function mockApiResponse(
+		body: unknown,
+		init: { status?: number; statusText?: string; headers?: HeadersInit } = {},
+	) {
+		mockFetch.mockResolvedValueOnce(
+			new Response(JSON.stringify(body), {
+				status: init.status ?? 200,
+				statusText: init.statusText ?? "OK",
+				headers: { "content-type": "application/json", ...init.headers },
+			}),
+		);
+	}
+
 	it("parses a valid extraction response", async () => {
-		(mockCreate as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+		mockApiResponse({
 			content: [
 				{
 					type: "text",
@@ -53,6 +53,16 @@ describe("extractTable", () => {
 			"sk-ant-test",
 		);
 
+		expect(mockFetch).toHaveBeenCalledWith(
+			"https://api.anthropic.com/v1/messages",
+			expect.objectContaining({
+				method: "POST",
+				headers: expect.objectContaining({
+					"anthropic-version": "2023-06-01",
+					"x-api-key": "sk-ant-test",
+				}),
+			}),
+		);
 		expect(result.result.headers).toEqual(["Name", "Age"]);
 		expect(result.result.rows).toHaveLength(2);
 		expect(result.result.confidence).toBe(0.95);
@@ -63,7 +73,7 @@ describe("extractTable", () => {
 	});
 
 	it("strips markdown code fences from response", async () => {
-		(mockCreate as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+		mockApiResponse({
 			content: [
 				{
 					type: "text",
@@ -90,7 +100,7 @@ describe("extractTable", () => {
 	});
 
 	it("throws ExtractionError for invalid JSON response", async () => {
-		(mockCreate as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+		mockApiResponse({
 			content: [{ type: "text", text: "not json at all" }],
 			usage: { input_tokens: 500, output_tokens: 50 },
 		});
@@ -101,7 +111,7 @@ describe("extractTable", () => {
 	});
 
 	it("throws ExtractionError when headers missing", async () => {
-		(mockCreate as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+		mockApiResponse({
 			content: [
 				{
 					type: "text",
@@ -117,7 +127,7 @@ describe("extractTable", () => {
 	});
 
 	it("clamps confidence to [0, 1]", async () => {
-		(mockCreate as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+		mockApiResponse({
 			content: [
 				{
 					type: "text",
@@ -138,5 +148,34 @@ describe("extractTable", () => {
 		);
 
 		expect(result.result.confidence).toBe(1);
+	});
+
+	it("throws ApiKeyError for Anthropic auth failures", async () => {
+		mockApiResponse(
+			{ error: { message: "invalid x-api-key" } },
+			{ status: 401, statusText: "Unauthorized" },
+		);
+
+		await expect(
+			extractTable("base64data", "claude-haiku-4-5-20251001", "bad-key"),
+		).rejects.toThrow(ApiKeyError);
+	});
+
+	it("throws RateLimitError with retry-after seconds", async () => {
+		mockApiResponse(
+			{ error: { message: "rate limit exceeded" } },
+			{
+				status: 429,
+				statusText: "Too Many Requests",
+				headers: { "retry-after": "7" },
+			},
+		);
+
+		await expect(
+			extractTable("base64data", "claude-haiku-4-5-20251001", "sk-ant-test"),
+		).rejects.toMatchObject({
+			name: "RateLimitError",
+			retryAfterMs: 7000,
+		} satisfies Partial<InstanceType<typeof RateLimitError>>);
 	});
 });
