@@ -33,5 +33,11 @@
 		"vite": "6.4.3",
 		"vitest": "4.1.8",
 		"rollup": "2.80.0"
+	},
+	"overrides": {
+		"rollup": "2.80.0",
+		"vite": {
+			"rollup": "4.62.2"
+		}
 	}
 }
