@@ -1,4 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
 import type { ExtractionMode, ExtractionResult, ModelId } from "../types";
 import { getExtractionPrompt } from "./prompts";
 
@@ -41,6 +40,22 @@ export interface ApiExtractionResponse {
 	result: ExtractionResult;
 }
 
+type AnthropicTextBlock = {
+	type: "text";
+	text: string;
+};
+
+type AnthropicMessageResponse = {
+	content?: AnthropicTextBlock[];
+	usage?: {
+		input_tokens?: number;
+		output_tokens?: number;
+	};
+};
+
+const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_VERSION = "2023-06-01";
+
 // ── Main extraction function ──────────────────────────────
 
 export async function extractTable(
@@ -51,42 +66,66 @@ export async function extractTable(
 ): Promise<ApiExtractionResponse> {
 	if (!apiKey) throw new ApiKeyError();
 
-	const client = new Anthropic({
-		apiKey,
-		dangerouslyAllowBrowser: true,
-	});
-
-	let response: Anthropic.Message;
+	let response: AnthropicMessageResponse;
 	try {
-		response = await client.messages.create({
-			model,
-			max_tokens: 4096,
-			messages: [
-				{
-					role: "user",
-					content: [
-						{
-							type: "image",
-							source: {
-								type: "base64",
-								media_type: "image/png",
-								data: imageBase64,
+		const apiResponse = await fetch(ANTHROPIC_MESSAGES_URL, {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				"anthropic-version": ANTHROPIC_VERSION,
+				"x-api-key": apiKey,
+			},
+			body: JSON.stringify({
+				model,
+				max_tokens: 4096,
+				messages: [
+					{
+						role: "user",
+						content: [
+							{
+								type: "image",
+								source: {
+									type: "base64",
+									media_type: "image/png",
+									data: imageBase64,
+								},
 							},
-						},
-						{
-							type: "text",
-							text: getExtractionPrompt(mode),
-						},
-					],
-				},
-			],
+							{
+								type: "text",
+								text: getExtractionPrompt(mode),
+							},
+						],
+					},
+				],
+			}),
 		});
-	} catch (err: unknown) {
-		if (err instanceof Anthropic.AuthenticationError) {
+
+		if (apiResponse.status === 401 || apiResponse.status === 403) {
 			throw new ApiKeyError("Invalid API key — check your key in Settings");
 		}
-		if (err instanceof Anthropic.RateLimitError) {
-			throw new RateLimitError();
+		if (apiResponse.status === 429) {
+			const retryAfter = Number(apiResponse.headers.get("retry-after"));
+			throw new RateLimitError(
+				Number.isFinite(retryAfter) ? retryAfter * 1000 : undefined,
+			);
+		}
+		if (!apiResponse.ok) {
+			const errorText = await apiResponse.text().catch(() => "");
+			throw new ExtractionError(
+				`API call failed: ${apiResponse.status} ${apiResponse.statusText}${
+					errorText ? ` — ${errorText.slice(0, 200)}` : ""
+				}`,
+			);
+		}
+
+		response = (await apiResponse.json()) as AnthropicMessageResponse;
+	} catch (err: unknown) {
+		if (
+			err instanceof ApiKeyError ||
+			err instanceof RateLimitError ||
+			err instanceof ExtractionError
+		) {
+			throw err;
 		}
 		if (err instanceof Error) {
 			throw new ExtractionError(`API call failed: ${err.message}`);
@@ -98,8 +137,8 @@ export async function extractTable(
 	const outputTokens = response.usage?.output_tokens ?? 0;
 	const totalTokens = inputTokens + outputTokens;
 
-	const textBlock = response.content.find((b) => b.type === "text");
-	if (!textBlock || textBlock.type !== "text") {
+	const textBlock = response.content?.find((b) => b.type === "text");
+	if (!textBlock) {
 		throw new ExtractionError("No text content in API response");
 	}
 
