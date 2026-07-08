@@ -40,21 +40,18 @@ export interface ApiExtractionResponse {
 	result: ExtractionResult;
 }
 
-type AnthropicTextBlock = {
+interface AnthropicTextBlock {
 	type: "text";
 	text: string;
-};
+}
 
-type AnthropicMessageResponse = {
-	content?: AnthropicTextBlock[];
+interface AnthropicMessageResponse {
+	content: Array<AnthropicTextBlock | { type: string }>;
 	usage?: {
 		input_tokens?: number;
 		output_tokens?: number;
 	};
-};
-
-const ANTHROPIC_MESSAGES_URL = "https://api.anthropic.com/v1/messages";
-const ANTHROPIC_VERSION = "2023-06-01";
+}
 
 // ── Main extraction function ──────────────────────────────
 
@@ -68,11 +65,12 @@ export async function extractTable(
 
 	let response: AnthropicMessageResponse;
 	try {
-		const apiResponse = await fetch(ANTHROPIC_MESSAGES_URL, {
+		const apiResponse = await fetch("https://api.anthropic.com/v1/messages", {
 			method: "POST",
 			headers: {
+				"anthropic-dangerous-direct-browser-access": "true",
+				"anthropic-version": "2023-06-01",
 				"content-type": "application/json",
-				"anthropic-version": ANTHROPIC_VERSION,
 				"x-api-key": apiKey,
 			},
 			body: JSON.stringify({
@@ -104,29 +102,19 @@ export async function extractTable(
 			throw new ApiKeyError("Invalid API key — check your key in Settings");
 		}
 		if (apiResponse.status === 429) {
-			const retryAfter = Number(apiResponse.headers.get("retry-after"));
-			throw new RateLimitError(
-				Number.isFinite(retryAfter) ? retryAfter * 1000 : undefined,
-			);
+			throw new RateLimitError();
 		}
 		if (!apiResponse.ok) {
-			const errorText = await apiResponse.text().catch(() => "");
+			const message = await apiResponse.text();
 			throw new ExtractionError(
-				`API call failed: ${apiResponse.status} ${apiResponse.statusText}${
-					errorText ? ` — ${errorText.slice(0, 200)}` : ""
-				}`,
+				`API call failed: ${message || apiResponse.statusText}`,
 			);
 		}
 
 		response = (await apiResponse.json()) as AnthropicMessageResponse;
 	} catch (err: unknown) {
-		if (
-			err instanceof ApiKeyError ||
-			err instanceof RateLimitError ||
-			err instanceof ExtractionError
-		) {
-			throw err;
-		}
+		if (err instanceof ApiKeyError || err instanceof RateLimitError) throw err;
+		if (err instanceof ExtractionError) throw err;
 		if (err instanceof Error) {
 			throw new ExtractionError(`API call failed: ${err.message}`);
 		}
@@ -137,7 +125,9 @@ export async function extractTable(
 	const outputTokens = response.usage?.output_tokens ?? 0;
 	const totalTokens = inputTokens + outputTokens;
 
-	const textBlock = response.content?.find((b) => b.type === "text");
+	const textBlock = response.content.find(
+		(b): b is AnthropicTextBlock => b.type === "text" && "text" in b,
+	);
 	if (!textBlock) {
 		throw new ExtractionError("No text content in API response");
 	}
