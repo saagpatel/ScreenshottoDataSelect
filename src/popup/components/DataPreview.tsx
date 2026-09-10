@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from "react";
 import { calculateCost, formatCost } from "../../lib/cost";
 import type { ExtractionResult, ModelId, OutputFormat } from "../../types";
 import ExportBar from "./ExportBar";
@@ -13,6 +14,35 @@ interface DataPreviewProps {
 	onReExtract?: () => void;
 }
 
+const PREVIEW_ROW_LIMIT = 20;
+
+const editorClassName =
+	"w-full min-w-[4rem] min-h-[1.25rem] bg-transparent border-0 p-0 m-0 font-sans text-xs leading-5 rounded-sm resize-none overflow-auto focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:bg-white";
+
+function cloneResult(result: ExtractionResult): ExtractionResult {
+	return {
+		...result,
+		headers: result.headers.slice(),
+		rows: result.rows.map((row) => row.slice()),
+	};
+}
+
+function columnCountOf(result: ExtractionResult): number {
+	return result.rows.reduce(
+		(max, row) => Math.max(max, row.length),
+		result.headers.length,
+	);
+}
+
+function headerLabel(index: number): string {
+	return `Column ${index + 1} header`;
+}
+
+function cellLabel(header: string, rowIndex: number, colIndex: number): string {
+	const column = header.trim() ? header : `column ${colIndex + 1}`;
+	return `${column}, row ${rowIndex + 1}`;
+}
+
 export default function DataPreview({
 	result,
 	imageDataUrl,
@@ -23,7 +53,39 @@ export default function DataPreview({
 	onReset,
 	onReExtract,
 }: DataPreviewProps) {
-	const { headers, rows, confidence } = result;
+	const [draft, setDraft] = useState(() => cloneResult(result));
+
+	useEffect(() => {
+		setDraft(cloneResult(result));
+	}, [result]);
+
+	const columnCount = columnCountOf(draft);
+	const previewRows = draft.rows.slice(0, PREVIEW_ROW_LIMIT);
+
+	const updateHeader = useCallback((index: number, value: string) => {
+		setDraft((prev) => {
+			const headers = prev.headers.slice();
+			while (headers.length <= index) headers.push("");
+			headers[index] = value;
+			return { ...prev, headers };
+		});
+	}, []);
+
+	const updateCell = useCallback(
+		(rowIndex: number, colIndex: number, value: string) => {
+			setDraft((prev) => {
+				const rows = prev.rows.map((row) => row.slice());
+				const row = rows[rowIndex] ?? [];
+				while (row.length <= colIndex) row.push("");
+				row[colIndex] = value;
+				rows[rowIndex] = row;
+				return { ...prev, rows };
+			});
+		},
+		[],
+	);
+
+	const { confidence } = result;
 
 	const confidenceColor =
 		confidence >= 0.9
@@ -53,7 +115,7 @@ export default function DataPreview({
 						{Math.round(confidence * 100)}%
 					</span>
 					<span>
-						{rows.length} rows × {headers.length} cols
+						{draft.rows.length} rows × {columnCount} cols
 					</span>
 					{durationMs !== undefined && (
 						<span>{(durationMs / 1000).toFixed(1)}s</span>
@@ -124,30 +186,57 @@ export default function DataPreview({
 			{/* Table */}
 			<div className="overflow-x-auto border border-slate-200 rounded-lg max-h-[220px] overflow-y-auto">
 				<table className="w-full text-xs text-left">
+					<caption className="sr-only">
+						Extracted data preview. Headers and cells are editable. Changes
+						apply to export only.
+					</caption>
 					<thead className="bg-slate-50 sticky top-0">
 						<tr>
-							{headers.map((h, i) => (
+							{Array.from({ length: columnCount }, (_, i) => (
 								<th
 									key={`h-${i}`}
-									className="px-2 py-1.5 font-semibold text-slate-600 border-b border-slate-200 whitespace-nowrap"
+									className="px-2 py-1.5 font-semibold text-slate-600 border-b border-slate-200 align-top"
+									scope="col"
 								>
-									{h}
+									<textarea
+										aria-label={headerLabel(i)}
+										value={draft.headers[i] ?? ""}
+										onChange={(event) => updateHeader(i, event.target.value)}
+										rows={1}
+										spellCheck={false}
+										autoComplete="off"
+										className={`${editorClassName} font-semibold text-slate-600`}
+									/>
 								</th>
 							))}
 						</tr>
 					</thead>
 					<tbody>
-						{rows.slice(0, 20).map((row, ri) => (
+						{previewRows.map((row, ri) => (
 							<tr
 								key={`r-${ri}`}
 								className={ri % 2 === 0 ? "bg-white" : "bg-slate-50/50"}
 							>
-								{row.map((cell, ci) => (
+								{Array.from({ length: columnCount }, (_, ci) => (
 									<td
 										key={`c-${ri}-${ci}`}
-										className="px-2 py-1 border-b border-slate-100 whitespace-nowrap"
+										className="px-2 py-1 border-b border-slate-100 align-top"
 									>
-										{cell}
+										<textarea
+											aria-label={cellLabel(
+												draft.headers[ci] ?? "",
+												ri,
+												ci,
+											)}
+											value={row[ci] ?? ""}
+											onChange={(event) =>
+												updateCell(ri, ci, event.target.value)
+											}
+											rows={1}
+											spellCheck={false}
+											autoComplete="off"
+											className={`${editorClassName} text-slate-700`}
+										/>
 									</td>
 								))}
 							</tr>
@@ -156,14 +245,14 @@ export default function DataPreview({
 				</table>
 			</div>
 
-			{rows.length > 20 && (
+			{draft.rows.length > PREVIEW_ROW_LIMIT && (
 				<p className="text-xs text-slate-400 text-center">
-					Showing 20 of {rows.length} rows
+					Showing {PREVIEW_ROW_LIMIT} of {draft.rows.length} rows
 				</p>
 			)}
 
-			{/* Export */}
-			<ExportBar result={result} defaultFormat={defaultFormat} />
+			{/* Export uses the local draft so copy/download reflect edits */}
+			<ExportBar result={draft} defaultFormat={defaultFormat} />
 		</div>
 	);
 }
