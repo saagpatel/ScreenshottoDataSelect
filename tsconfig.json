@@ -12,7 +12,7 @@
 		"forceConsistentCasingInFileNames": true,
 		"resolveJsonModule": true,
 		"isolatedModules": true,
-		"types": ["chrome", "vitest/globals"]
+		"types": ["chrome", "vitest/globals", "vite/client"]
 	},
 	"include": ["src/**/*", "tests/**/*"],
 	"exclude": ["node_modules", "dist"]
