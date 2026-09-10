@@ -23,6 +23,17 @@ function draftColumnLabel(index: number): string {
 	return `Column ${index + 1}`;
 }
 
+function unusedDraftColumnLabel(existing: string[]): string {
+	const used = new Set(existing);
+	let n = existing.length + 1;
+	let label = `Column ${n}`;
+	while (used.has(label)) {
+		n += 1;
+		label = `Column ${n}`;
+	}
+	return label;
+}
+
 function columnCountOf(result: ExtractionResult): number {
 	return result.rows.reduce(
 		(max, row) => Math.max(max, row.length),
@@ -38,7 +49,7 @@ function cloneResult(result: ExtractionResult): ExtractionResult {
 		headers.length,
 	);
 	while (headers.length < columnCount) {
-		headers.push(draftColumnLabel(headers.length));
+		headers.push(unusedDraftColumnLabel(headers));
 	}
 	return {
 		...result,
@@ -79,7 +90,7 @@ export default function DataPreview({
 		setDraft((prev) => {
 			const headers = prev.headers.slice();
 			while (headers.length <= index) {
-				headers.push(draftColumnLabel(headers.length));
+				headers.push(unusedDraftColumnLabel(headers));
 			}
 			headers[index] = value;
 			return { ...prev, headers };
@@ -91,7 +102,7 @@ export default function DataPreview({
 			setDraft((prev) => {
 				const headers = prev.headers.slice();
 				while (headers.length <= colIndex) {
-					headers.push(draftColumnLabel(headers.length));
+					headers.push(unusedDraftColumnLabel(headers));
 				}
 				const rows = prev.rows.map((row) => row.slice());
 				const row = rows[rowIndex] ?? [];

@@ -96,6 +96,32 @@ describe("toJSON", () => {
 		const parsed = JSON.parse(toJSON(result));
 		expect(parsed[0]).toEqual({ A: "1", B: "" });
 	});
+
+	it("keeps duplicate header values under deterministic unique keys", () => {
+		const result: ExtractionResult = {
+			headers: ["Name", "Name", "Name (2)"],
+			rows: [["a", "b", "c"]],
+			confidence: 1,
+			rawResponse: "",
+		};
+		expect(JSON.parse(toJSON(result))).toEqual([
+			{ Name: "a", "Name (2)": "b", "Name (2) (2)": "c" },
+		]);
+		expect(toCSV(result)).toBe("Name,Name,Name (2)\r\na,b,c");
+	});
+
+	it("does not drop cells when generated Column N labels collide", () => {
+		const result: ExtractionResult = {
+			headers: ["Column 2", "Column 2"],
+			rows: [["left", "right"]],
+			confidence: 1,
+			rawResponse: "",
+		};
+		expect(JSON.parse(toJSON(result))).toEqual([
+			{ "Column 2": "left", "Column 2 (2)": "right" },
+		]);
+		expect(toCSV(result)).toBe("Column 2,Column 2\r\nleft,right");
+	});
 });
 
 describe("toTSV", () => {
