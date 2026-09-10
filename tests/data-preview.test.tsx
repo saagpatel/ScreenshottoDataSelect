@@ -49,15 +49,7 @@ async function copiedText(buttonName: string): Promise<string> {
 	return text as string;
 }
 
-async function expectAllExportPaths(
-	expected: ExtractionResult,
-	downloadName = "Download CSV",
-): Promise<void> {
-	expect(await copiedText("CSV")).toBe(toCSV(expected));
-	expect(await copiedText("JSON")).toBe(toJSON(expected));
-	expect(await copiedText("TSV")).toBe(toTSV(expected));
-	expect(await copiedText("MD")).toBe(toMarkdown(expected));
-
+async function downloadedText(buttonName: string): Promise<string> {
 	const createObjectURL = vi
 		.spyOn(URL, "createObjectURL")
 		.mockReturnValue("blob:preview-test");
@@ -69,18 +61,29 @@ async function expectAllExportPaths(
 		.mockImplementation(() => {});
 
 	try {
-		fireEvent.click(screen.getByRole("button", { name: downloadName }));
+		fireEvent.click(screen.getByRole("button", { name: buttonName }));
 		expect(createObjectURL).toHaveBeenCalled();
 		const blob = createObjectURL.mock.calls[0]?.[0];
 		expect(blob).toBeInstanceOf(Blob);
-		expect(await (blob as Blob).text()).toBe(toCSV(expected));
 		expect(click).toHaveBeenCalled();
 		expect(revokeObjectURL).toHaveBeenCalledWith("blob:preview-test");
+		return await (blob as Blob).text();
 	} finally {
 		createObjectURL.mockRestore();
 		revokeObjectURL.mockRestore();
 		click.mockRestore();
 	}
+}
+
+async function expectAllExportPaths(
+	expected: ExtractionResult,
+	downloadName = "Download CSV",
+): Promise<void> {
+	expect(await copiedText("CSV")).toBe(toCSV(expected));
+	expect(await copiedText("JSON")).toBe(toJSON(expected));
+	expect(await copiedText("TSV")).toBe(toTSV(expected));
+	expect(await copiedText("MD")).toBe(toMarkdown(expected));
+	expect(await downloadedText(downloadName)).toBe(toCSV(expected));
 
 	const open = vi.spyOn(window, "open").mockImplementation(() => null);
 	try {
@@ -253,6 +256,73 @@ describe("DataPreview editable draft", () => {
 			["Alice", "extra-a", "extra-b"],
 			["Bob", "extra-c"],
 		]);
+	});
+
+	it("keeps extra cells when a generated Column N label would collide", async () => {
+		const result = deepFreezeResult(
+			sampleResult({
+				headers: ["Column 2"],
+				rows: [["left", "right"]],
+			}),
+		);
+		renderPreview(result, { defaultFormat: "json" });
+
+		expect(screen.getByRole("textbox", { name: "Column 1 header" })).toHaveValue(
+			"Column 2",
+		);
+		expect(screen.getByRole("textbox", { name: "Column 2 header" })).toHaveValue(
+			"Column 3",
+		);
+		expect(
+			screen.getByRole("textbox", { name: "Column 2, row 1" }),
+		).toHaveValue("left");
+		expect(
+			screen.getByRole("textbox", { name: "Column 3, row 1" }),
+		).toHaveValue("right");
+
+		const json = JSON.parse(await copiedText("JSON"));
+		expect(Object.keys(json[0])).toHaveLength(2);
+		expect(Object.values(json[0])).toEqual(["left", "right"]);
+		expect(json[0]["Column 2"]).toBe("left");
+		expect(json[0]["Column 3"]).toBe("right");
+
+		const downloaded = JSON.parse(await downloadedText("Download JSON"));
+		expect(downloaded).toEqual(json);
+		expect(await copiedText("CSV")).toBe("Column 2,Column 3\r\nleft,right");
+		expect(result.headers).toEqual(["Column 2"]);
+	});
+
+	it("keeps every value when the user duplicates a header", async () => {
+		const result = sampleResult();
+		renderPreview(result, { defaultFormat: "json" });
+
+		fireEvent.change(screen.getByRole("textbox", { name: "Column 2 header" }), {
+			target: { value: "Name" },
+		});
+
+		expect(screen.getByRole("textbox", { name: "Column 1 header" })).toHaveValue(
+			"Name",
+		);
+		expect(screen.getByRole("textbox", { name: "Column 2 header" })).toHaveValue(
+			"Name",
+		);
+
+		const json = JSON.parse(await copiedText("JSON"));
+		expect(json).toEqual([
+			{ Name: "Alice", "Name (2)": "30" },
+			{ Name: "Bob", "Name (2)": "25" },
+		]);
+		expect(await downloadedText("Download JSON")).toBe(
+			toJSON({
+				...result,
+				headers: ["Name", "Name"],
+			}),
+		);
+		expect(await copiedText("CSV")).toBe("Name,Name\r\nAlice,30\r\nBob,25");
+		expect(await copiedText("TSV")).toBe("Name\tName\r\nAlice\t30\r\nBob\t25");
+		expect(await copiedText("MD")).toBe(
+			"| Name | Name |\n| --- | --- |\n| Alice | 30 |\n| Bob | 25 |",
+		);
 	});
 
 	it("keeps commas, quotes, newlines, and Unicode intact through edits and exports", async () => {

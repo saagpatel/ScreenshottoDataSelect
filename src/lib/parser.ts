@@ -17,9 +17,28 @@ export function toCSV(result: ExtractionResult): string {
 
 // ── JSON (array of objects) ───────────────────────────────
 
+function uniqueJsonKeys(headers: string[]): string[] {
+	const used = new Set<string>();
+	return headers.map((header) => {
+		if (!used.has(header)) {
+			used.add(header);
+			return header;
+		}
+		let n = 2;
+		let candidate = `${header} (${n})`;
+		while (used.has(candidate)) {
+			n += 1;
+			candidate = `${header} (${n})`;
+		}
+		used.add(candidate);
+		return candidate;
+	});
+}
+
 export function toJSON(result: ExtractionResult): string {
+	const keys = uniqueJsonKeys(result.headers);
 	const objects = result.rows.map((row) =>
-		Object.fromEntries(result.headers.map((h, i) => [h, row[i] ?? ""])),
+		Object.fromEntries(keys.map((key, i) => [key, row[i] ?? ""])),
 	);
 	return JSON.stringify(objects, null, 2);
 }
