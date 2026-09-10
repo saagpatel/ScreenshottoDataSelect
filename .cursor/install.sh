@@ -12,10 +12,9 @@ case "$(node --version)" in
 		;;
 esac
 
-# The committed lockfile intentionally retains the existing React 18/19 type
-# package pairing; npm's strict peer resolver rejects that locked tree even
-# though TypeScript and the test/build gates pass.  Keep the install exact
-# while allowing that existing peer relationship.
+# Aligning React and react-dom on 19 is required for component tests, but
+# npm's strict peer resolver still rejects other locked peer relationships
+# (Testing Library, CRXJS). Keep the install exact while allowing those.
 npm ci --legacy-peer-deps
 npm run typecheck
 npm test
