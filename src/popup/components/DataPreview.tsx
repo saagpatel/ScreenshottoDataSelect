@@ -19,12 +19,8 @@ const PREVIEW_ROW_LIMIT = 20;
 const editorClassName =
 	"w-full min-w-[4rem] min-h-[1.25rem] bg-transparent border-0 p-0 m-0 font-sans text-xs leading-5 rounded-sm resize-none overflow-auto focus:outline-none focus:ring-1 focus:ring-indigo-400 focus:bg-white";
 
-function cloneResult(result: ExtractionResult): ExtractionResult {
-	return {
-		...result,
-		headers: result.headers.slice(),
-		rows: result.rows.map((row) => row.slice()),
-	};
+function draftColumnLabel(index: number): string {
+	return `Column ${index + 1}`;
 }
 
 function columnCountOf(result: ExtractionResult): number {
@@ -34,8 +30,25 @@ function columnCountOf(result: ExtractionResult): number {
 	);
 }
 
+function cloneResult(result: ExtractionResult): ExtractionResult {
+	const headers = result.headers.slice();
+	const rows = result.rows.map((row) => row.slice());
+	const columnCount = rows.reduce(
+		(max, row) => Math.max(max, row.length),
+		headers.length,
+	);
+	while (headers.length < columnCount) {
+		headers.push(draftColumnLabel(headers.length));
+	}
+	return {
+		...result,
+		headers,
+		rows,
+	};
+}
+
 function headerLabel(index: number): string {
-	return `Column ${index + 1} header`;
+	return `${draftColumnLabel(index)} header`;
 }
 
 function cellLabel(header: string, rowIndex: number, colIndex: number): string {
@@ -65,7 +78,9 @@ export default function DataPreview({
 	const updateHeader = useCallback((index: number, value: string) => {
 		setDraft((prev) => {
 			const headers = prev.headers.slice();
-			while (headers.length <= index) headers.push("");
+			while (headers.length <= index) {
+				headers.push(draftColumnLabel(headers.length));
+			}
 			headers[index] = value;
 			return { ...prev, headers };
 		});
@@ -74,12 +89,16 @@ export default function DataPreview({
 	const updateCell = useCallback(
 		(rowIndex: number, colIndex: number, value: string) => {
 			setDraft((prev) => {
+				const headers = prev.headers.slice();
+				while (headers.length <= colIndex) {
+					headers.push(draftColumnLabel(headers.length));
+				}
 				const rows = prev.rows.map((row) => row.slice());
 				const row = rows[rowIndex] ?? [];
 				while (row.length <= colIndex) row.push("");
 				row[colIndex] = value;
 				rows[rowIndex] = row;
-				return { ...prev, rows };
+				return { ...prev, headers, rows };
 			});
 		},
 		[],
