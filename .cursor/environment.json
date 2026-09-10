@@ -1,0 +1,6 @@
+{
+	"name": "ScreenshottoDataSelect",
+	"disableAllMcpServers": true,
+	"install": "bash .cursor/install.sh",
+	"start": "true"
+}
