@@ -49,6 +49,56 @@ async function copiedText(buttonName: string): Promise<string> {
 	return text as string;
 }
 
+async function expectAllExportPaths(
+	expected: ExtractionResult,
+	downloadName = "Download CSV",
+): Promise<void> {
+	expect(await copiedText("CSV")).toBe(toCSV(expected));
+	expect(await copiedText("JSON")).toBe(toJSON(expected));
+	expect(await copiedText("TSV")).toBe(toTSV(expected));
+	expect(await copiedText("MD")).toBe(toMarkdown(expected));
+
+	const createObjectURL = vi
+		.spyOn(URL, "createObjectURL")
+		.mockReturnValue("blob:preview-test");
+	const revokeObjectURL = vi
+		.spyOn(URL, "revokeObjectURL")
+		.mockImplementation(() => {});
+	const click = vi
+		.spyOn(HTMLAnchorElement.prototype, "click")
+		.mockImplementation(() => {});
+
+	try {
+		fireEvent.click(screen.getByRole("button", { name: downloadName }));
+		expect(createObjectURL).toHaveBeenCalled();
+		const blob = createObjectURL.mock.calls[0]?.[0];
+		expect(blob).toBeInstanceOf(Blob);
+		expect(await (blob as Blob).text()).toBe(toCSV(expected));
+		expect(click).toHaveBeenCalled();
+		expect(revokeObjectURL).toHaveBeenCalledWith("blob:preview-test");
+	} finally {
+		createObjectURL.mockRestore();
+		revokeObjectURL.mockRestore();
+		click.mockRestore();
+	}
+
+	const open = vi.spyOn(window, "open").mockImplementation(() => null);
+	try {
+		fireEvent.click(
+			screen.getByRole("button", { name: "Open in Google Sheets" }),
+		);
+		await waitFor(() =>
+			expect(writeText).toHaveBeenLastCalledWith(toTSV(expected)),
+		);
+		expect(open).toHaveBeenCalledWith(
+			"https://docs.google.com/spreadsheets/create",
+			"_blank",
+		);
+	} finally {
+		open.mockRestore();
+	}
+}
+
 describe("DataPreview editable draft", () => {
 	beforeEach(() => {
 		writeText.mockClear();
@@ -105,50 +155,7 @@ describe("DataPreview editable draft", () => {
 			],
 		};
 
-		expect(await copiedText("CSV")).toBe(toCSV(edited));
-		expect(await copiedText("JSON")).toBe(toJSON(edited));
-		expect(await copiedText("TSV")).toBe(toTSV(edited));
-		expect(await copiedText("MD")).toBe(toMarkdown(edited));
-
-		const createObjectURL = vi
-			.spyOn(URL, "createObjectURL")
-			.mockReturnValue("blob:preview-test");
-		const revokeObjectURL = vi
-			.spyOn(URL, "revokeObjectURL")
-			.mockImplementation(() => {});
-		const click = vi
-			.spyOn(HTMLAnchorElement.prototype, "click")
-			.mockImplementation(() => {});
-
-		try {
-			fireEvent.click(screen.getByRole("button", { name: "Download CSV" }));
-			expect(createObjectURL).toHaveBeenCalled();
-			const blob = createObjectURL.mock.calls[0]?.[0];
-			expect(blob).toBeInstanceOf(Blob);
-			expect(await (blob as Blob).text()).toBe(toCSV(edited));
-			expect(click).toHaveBeenCalled();
-			expect(revokeObjectURL).toHaveBeenCalledWith("blob:preview-test");
-		} finally {
-			createObjectURL.mockRestore();
-			revokeObjectURL.mockRestore();
-			click.mockRestore();
-		}
-
-		const open = vi.spyOn(window, "open").mockImplementation(() => null);
-		try {
-			fireEvent.click(
-				screen.getByRole("button", { name: "Open in Google Sheets" }),
-			);
-			await waitFor(() =>
-				expect(writeText).toHaveBeenLastCalledWith(toTSV(edited)),
-			);
-			expect(open).toHaveBeenCalledWith(
-				"https://docs.google.com/spreadsheets/create",
-				"_blank",
-			);
-		} finally {
-			open.mockRestore();
-		}
+		await expectAllExportPaths(edited);
 	});
 
 	it("renders and exports ragged rows, including previously missing cells", async () => {
@@ -184,6 +191,68 @@ describe("DataPreview editable draft", () => {
 		expect(JSON.parse(await copiedText("JSON"))).toEqual(
 			JSON.parse(toJSON(edited)),
 		);
+	});
+
+	it("pads draft headers so cells beyond the source headers survive every export path", async () => {
+		const result = deepFreezeResult(
+			sampleResult({
+				headers: ["Name"],
+				rows: [
+					["Alice", "extra-a", "extra-b"],
+					["Bob", "extra-c"],
+				],
+			}),
+		);
+		renderPreview(result, { defaultFormat: "csv" });
+
+		expect(screen.getByRole("textbox", { name: "Column 2 header" })).toHaveValue(
+			"Column 2",
+		);
+		expect(screen.getByRole("textbox", { name: "Column 3 header" })).toHaveValue(
+			"Column 3",
+		);
+		expect(
+			screen.getByRole("textbox", { name: "Column 2, row 1" }),
+		).toHaveValue("extra-a");
+		expect(
+			screen.getByRole("textbox", { name: "Column 3, row 1" }),
+		).toHaveValue("extra-b");
+		expect(
+			screen.getByRole("textbox", { name: "Column 2, row 2" }),
+		).toHaveValue("extra-c");
+
+		const exported: ExtractionResult = {
+			...result,
+			headers: ["Name", "Column 2", "Column 3"],
+			rows: [
+				["Alice", "extra-a", "extra-b"],
+				["Bob", "extra-c"],
+			],
+		};
+
+		const jsonWithoutPad = JSON.parse(toJSON(result));
+		expect(jsonWithoutPad[0]).toEqual({ Name: "Alice" });
+		expect(jsonWithoutPad[0]).not.toHaveProperty("Column 2");
+
+		const json = JSON.parse(toJSON(exported));
+		expect(json[0]).toEqual({
+			Name: "Alice",
+			"Column 2": "extra-a",
+			"Column 3": "extra-b",
+		});
+		expect(json[1]).toEqual({
+			Name: "Bob",
+			"Column 2": "extra-c",
+			"Column 3": "",
+		});
+
+		await expectAllExportPaths(exported);
+
+		expect(result.headers).toEqual(["Name"]);
+		expect(result.rows).toEqual([
+			["Alice", "extra-a", "extra-b"],
+			["Bob", "extra-c"],
+		]);
 	});
 
 	it("keeps commas, quotes, newlines, and Unicode intact through edits and exports", async () => {
