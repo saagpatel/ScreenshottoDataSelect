@@ -6,6 +6,13 @@ import manifest from "./src/manifest";
 
 export default defineConfig({
 	plugins: [react(), crx({ manifest })],
+	build: {
+		rollupOptions: {
+			input: {
+				offscreen: "src/offscreen/offscreen.html",
+			},
+		},
+	},
 	test: {
 		globals: true,
 		environment: "jsdom",

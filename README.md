@@ -59,6 +59,13 @@ is available for iteration. Tests use synthetic data and mocked fetch/Chrome API
 need no Anthropic key. No lint/format script is configured. The build writes `dist/`;
 unit tests do not prove extension permissions or browser/service-worker behavior.
 
+The build also runs `npm run check:package` against the emitted worker with mocked
+Chrome APIs. It verifies that its injected script, offscreen HTML and offscreen
+script exist in `dist/`. The overlay is a standalone CRXJS IIFE so Chrome can
+execute it before the worker sends the selection message. During development,
+reload the host page after overlay changes; standalone scripts do not receive
+in-place HMR. These packaging checks do not prove Chrome runtime behavior.
+
 For popup, selection, DOM extraction or messaging changes, additionally load `dist/`
 in a disposable Chrome profile and check the affected interaction on a synthetic HTML
 table. Keep API credentials absent and exercise the DOM path; Vision fallback sends
