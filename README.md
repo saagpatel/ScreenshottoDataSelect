@@ -18,7 +18,7 @@ DataSelect is a Chrome extension that lets you draw a selection rectangle over a
 ## Quick Start
 
 ### Prerequisites
-- Node.js 18+
+- Node.js 22.13+ within 22.x, 24.x, or 26+ (for build and tests)
 - Anthropic API key (only needed for chart/canvas extraction)
 
 ### Installation
