@@ -23,7 +23,7 @@ DataSelect is a Chrome extension that lets you draw a selection rectangle over a
 
 ### Installation
 ```bash
-npm install
+npm ci --ignore-scripts
 npm run build
 ```
 Then load the `dist/` folder as an unpacked extension in `chrome://extensions`.
@@ -36,6 +36,31 @@ npm run dev
 # Type-check without building
 npm run typecheck
 ```
+
+## Verification
+
+Run from the repository root using the Node versions above. `npm ci --ignore-scripts`
+installs the committed lockfile without package lifecycle scripts. The local gate is:
+
+```bash
+npm ci --ignore-scripts
+npm run typecheck
+npm test
+npm run build
+```
+
+For a parser-only change, use `npm test -- tests/parser.test.ts`; `npm run test:watch`
+is available for iteration. Tests use synthetic data and mocked fetch/Chrome APIs and
+need no Anthropic key. No lint/format script is configured. The build writes `dist/`;
+unit tests do not prove extension permissions or browser/service-worker behavior.
+
+For popup, selection, DOM extraction or messaging changes, additionally load `dist/`
+in a disposable Chrome profile and check the affected interaction on a synthetic HTML
+table. Keep API credentials absent and exercise the DOM path; Vision fallback sends
+screenshots to a paid provider and is a separate, explicitly authorized check. Use the
+same disposable profile for history/storage checks. Documentation-only changes do not
+require a browser run. Hosted [CodeQL](.github/workflows/codeql.yml) is a separate
+security check; it does not run this local test/build gate.
 
 ## Tech Stack
 
