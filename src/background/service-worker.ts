@@ -1,3 +1,4 @@
+import overlayScript from "../content/overlay.ts?iife";
 import { extractTable } from "../lib/api";
 import { type ExtensionMessage, isExtensionMessage } from "../lib/messages";
 import { get, getApiKey, set, setExtractionState } from "../lib/storage";
@@ -88,7 +89,7 @@ async function handleStartSelection(): Promise<{ ok: boolean }> {
 
 	await chrome.scripting.executeScript({
 		target: { tabId: tab.id, allFrames: true },
-		files: ["src/content/overlay.ts"],
+		files: [overlayScript],
 	});
 
 	await chrome.tabs.sendMessage(tab.id, { type: "START_SELECTION" });

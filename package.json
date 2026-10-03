@@ -5,7 +5,8 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite",
-		"build": "tsc --noEmit && vite build",
+		"build": "tsc --noEmit && vite build && npm run check:package",
+		"check:package": "node scripts/check-package.mjs",
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"typecheck": "tsc --noEmit"
