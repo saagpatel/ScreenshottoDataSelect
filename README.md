@@ -22,6 +22,8 @@ DataSelect is a Chrome extension that lets you draw a selection rectangle over a
 - Anthropic API key (only needed for chart/canvas extraction)
 
 ### Installation
+Use npm with the committed `package-lock.json`.
+
 ```bash
 npm ci --ignore-scripts
 npm run build
@@ -49,6 +51,9 @@ npm test
 npm run build
 ```
 
+Makefile shortcuts: `make install`, `make dev`, `make typecheck`, `make test`,
+and `make build` invoke the corresponding npm commands above.
+
 For a parser-only change, use `npm test -- tests/parser.test.ts`; `npm run test:watch`
 is available for iteration. Tests use synthetic data and mocked fetch/Chrome APIs and
 need no Anthropic key. No lint/format script is configured. The build writes `dist/`;
@@ -66,11 +71,12 @@ security check; it does not run this local test/build gate.
 
 | Layer | Technology |
 |-------|------------|
-| Language | TypeScript 5.5 |
-| UI | React 18.3 |
-| Bundler | Vite |
-| Styling | Tailwind CSS |
-| AI | Anthropic Claude Vision API |
+| Language | TypeScript 7.0.2 |
+| UI | React / React DOM 19.3.0 |
+| Bundler | Vite 8.3.0 + @crxjs/vite-plugin 2.7.1 |
+| Styling | Tailwind CSS 3.4.19 |
+| Tests | Vitest 5.0.3 + jsdom 29.1.1 |
+| AI | Anthropic Messages API via native `fetch` (no SDK dependency) |
 
 ## Architecture
 

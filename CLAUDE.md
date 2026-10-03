@@ -3,11 +3,11 @@
 A Chrome Extension (Manifest V3) that lets users select any visible table or chart on a webpage, captures a screenshot of the region, sends it to Anthropic Claude Vision API for structured data extraction, and returns CSV/JSON/TSV/Markdown. Works on any visual content — HTML tables, canvas charts, images, PDFs in browser — with DOM-first extraction as the primary strategy and Vision API as fallback/confirmation. Includes extraction history, cost display, and context menu access.
 
 ## Tech Stack
-- **TypeScript 5.5+** — all source files
-- **Vite 6.x + @crxjs/vite-plugin 2.x (beta)** — build system with Chrome extension HMR
-- **React 18.3+** — popup UI and history view
-- **Tailwind CSS 3.4+** — popup styling
-- **@anthropic-ai/sdk 0.80+** — Vision API calls
+- **TypeScript 7.0.2** — all source files
+- **Vite 8.3.0 + @crxjs/vite-plugin 2.7.1** — build system with Chrome extension HMR
+- **React 19.3.0** — popup UI and history view
+- **Tailwind CSS 3.4.19** — popup styling
+- **Anthropic Messages API via native `fetch`** — Vision API calls (no SDK dependency)
 - **Chrome MV3 APIs** — tabs, scripting, storage, offscreenDocument
 - **Vanilla JS** — content script overlay (no React in content scripts)
 
@@ -19,13 +19,30 @@ Phase 3 complete — all planned phases shipped:
 - Phase 3: DOM-first extraction strategy, chart-specific prompts, cost display, edge case handling, thumbnail compression for history
 
 ## Build & Run
+
+Use npm with the committed `package-lock.json`. Build and tests require Node.js
+22.13+ within 22.x, 24.x, or 26+ (the intersection of locked dependency engines).
+
 ```bash
-npm install
+npm ci --ignore-scripts
 npm run build      # production build → dist/
 npm run dev        # development build with HMR
 ```
 
 Load the `dist/` directory as an unpacked extension in `chrome://extensions`. API key configured in extension settings (stored in `chrome.storage.local`).
+
+## Verification
+
+```bash
+npm run typecheck
+npm test
+npm run build
+```
+
+`npm run test:watch` runs Vitest interactively. No lint/format script is configured.
+Tests use synthetic data and mocked fetch/Chrome APIs; no Anthropic key is needed.
+See README.md for browser verification of UI changes. The CodeQL workflow analyzes
+JavaScript/TypeScript separately and does not run the local test/build gate.
 
 ## Architecture
 - `src/background/` — message routing hub; all API calls and storage ops go here
@@ -38,7 +55,7 @@ Load the `dist/` directory as an unpacked extension in `chrome://extensions`. AP
 - History capped at 50 entries with thumbnail compression to stay within storage limits
 
 ## Known Issues
-- `@crxjs/vite-plugin` 2.x is beta — occasional HMR quirks in development
+- Extension HMR should be checked in Chrome when changing development tooling
 - DOM-first extraction quality varies by site structure; Vision API fallback adds latency and cost
 - Cost display is estimated based on token counts; actual Anthropic billing may differ slightly
 
@@ -59,18 +76,18 @@ Phase 3 complete — all planned phases shipped:
 
 ## Stack
 
-- **TypeScript 5.5+** — all source files
-- **Vite 6.x + @crxjs/vite-plugin 2.x (beta)** — build system with Chrome extension HMR
-- **React 18.3+** — popup UI and history view
-- **Tailwind CSS 3.4+** — popup styling
-- **@anthropic-ai/sdk 0.80+** — Vision API calls
+- **TypeScript 7.0.2** — all source files
+- **Vite 8.3.0 + @crxjs/vite-plugin 2.7.1** — build system with Chrome extension HMR
+- **React 19.3.0** — popup UI and history view
+- **Tailwind CSS 3.4.19** — popup styling
+- **Anthropic Messages API via native `fetch`** — Vision API calls (no SDK dependency)
 - **Chrome MV3 APIs** — tabs, scripting, storage, offscreenDocument
 - **Vanilla JS** — content script overlay (no React in content scripts)
 
 ## How To Run
 
 ```bash
-npm install
+npm ci --ignore-scripts
 npm run build      # production build → dist/
 npm run dev        # development build with HMR
 ```
@@ -79,7 +96,7 @@ Load the `dist/` directory as an unpacked extension in `chrome://extensions`. AP
 
 ## Known Risks
 
-- `@crxjs/vite-plugin` 2.x is beta — occasional HMR quirks in development
+- Extension HMR should be checked in Chrome when changing development tooling
 - DOM-first extraction quality varies by site structure; Vision API fallback adds latency and cost
 - Cost display is estimated based on token counts; actual Anthropic billing may differ slightly
 
