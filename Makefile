@@ -1,19 +1,19 @@
-.PHONY: dev build test lint clean install
+.PHONY: dev build test typecheck clean install
 
 install:
-	pnpm install
+	npm ci --ignore-scripts
 
 dev:
-	pnpm dev
+	npm run dev
 
 build:
-	pnpm build
+	npm run build
 
 test:
-	pnpm test
+	npm test
 
-lint:
-	pnpm lint
+typecheck:
+	npm run typecheck
 
 clean:
 	rm -rf node_modules dist .next .turbo
